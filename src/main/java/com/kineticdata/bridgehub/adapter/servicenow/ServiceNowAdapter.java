@@ -22,11 +22,12 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.util.EntityUtils;
-import org.apache.log4j.Logger;
 import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang.StringUtils;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
+import org.slf4j.LoggerFactory;
 
 public class ServiceNowAdapter implements BridgeAdapter {
     /*----------------------------------------------------------------------------------------------
@@ -37,7 +38,7 @@ public class ServiceNowAdapter implements BridgeAdapter {
     public static final String NAME = "ServiceNow Bridge";
     
     /** Defines the logger */
-    protected static Logger logger = Logger.getLogger(ServiceNowAdapter.class);
+    protected static final org.slf4j.Logger logger = LoggerFactory.getLogger(ServiceNowAdapter.class);
     
     /** Defines the collection of property names for the adapter */
     public static class Properties {
@@ -157,7 +158,7 @@ public class ServiceNowAdapter implements BridgeAdapter {
         String joinedFields;
 
         if (fields != null) {
-            joinedFields = String.join(",", fields);
+            joinedFields = StringUtils.join(fields,",");
         }
         else {
             joinedFields = ""; // if fields not entered, returns all fields
@@ -207,7 +208,7 @@ public class ServiceNowAdapter implements BridgeAdapter {
                 record = new Record(null);
             } else {
                 JSONObject result = (JSONObject)results.get(0);
-                Map<String,Object> recordMap = new LinkedHashMap<>();
+                Map<String,Object> recordMap = new LinkedHashMap<String,Object>();
                 if (fields == null) { fields = new ArrayList( result.entrySet()); }
                 for (String field : fields) {
                     recordMap.put(field, result.get(field));
@@ -236,7 +237,7 @@ public class ServiceNowAdapter implements BridgeAdapter {
 
         if (request.getFields() != null) {
             fields = request.getFields();
-            joinedFields = String.join(",", fields);
+            joinedFields = StringUtils.join(fields,",");
         }
         else {
             fields = null;
@@ -268,7 +269,7 @@ public class ServiceNowAdapter implements BridgeAdapter {
                     }
                 } 
             }
-            order = String.join(",", orderList);
+            order = StringUtils.join(orderList,",");
         }
         
         queryBuilder.append(String.format("%s/api/now/v1/table/%s?sysparm_fields=%s&sysparm_query=%s%s", this.instance, structure, joinedFields, URLEncoder.encode(query), URLEncoder.encode(order)));
@@ -297,7 +298,7 @@ public class ServiceNowAdapter implements BridgeAdapter {
 
         JSONArray jsonArray;
         JSONObject jsonOutput = (JSONObject)JSONValue.parse(output);
-        ArrayList<Record> records = new ArrayList<>();
+        ArrayList<Record> records = new ArrayList<Record>();
         
         if (jsonOutput.get("error") != null) {
             JSONObject error = (JSONObject)jsonOutput.get("error");
@@ -316,7 +317,7 @@ public class ServiceNowAdapter implements BridgeAdapter {
             // If fields is null, all fields are returned. Get the first element
             // of the returned objects and get its fields.
             if (fields == null ) {
-                fields = new ArrayList<>();
+                fields = new ArrayList<String>();
                 JSONObject firstObject = (JSONObject)jsonArray.get(0);
                 Iterator allFields = firstObject.entrySet().iterator();
                 while ( allFields.hasNext() ) {
