@@ -20,7 +20,7 @@ import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang.StringUtils;
@@ -33,10 +33,10 @@ public class ServiceNowAdapter implements BridgeAdapter {
     /*----------------------------------------------------------------------------------------------
      * PROPERTIES
      *--------------------------------------------------------------------------------------------*/
-    
+
     /** Defines the adapter display name */
     public static final String NAME = "ServiceNow Bridge";
-    
+
     /** Defines the logger */
     protected static final org.slf4j.Logger logger = LoggerFactory.getLogger(ServiceNowAdapter.class);
 
@@ -53,14 +53,14 @@ public class ServiceNowAdapter implements BridgeAdapter {
             VERSION = "Unknown";
         }
     }
-    
+
     /** Defines the collection of property names for the adapter */
     public static class Properties {
         public static final String USERNAME = "Username";
         public static final String PASSWORD = "Password";
         public static final String INSTANCE = "ServiceNow Instance";
     }
-    
+
     private final ConfigurablePropertyMap properties = new ConfigurablePropertyMap(
         new ConfigurableProperty(Properties.USERNAME).setIsRequired(true),
         new ConfigurableProperty(Properties.PASSWORD).setIsRequired(true).setIsSensitive(true),
@@ -70,11 +70,11 @@ public class ServiceNowAdapter implements BridgeAdapter {
     private String username;
     private String password;
     private String instance;
-    
+
     /*---------------------------------------------------------------------------------------------
      * SETUP METHODS
      *-------------------------------------------------------------------------------------------*/
-    
+
     @Override
     public void initialize() throws BridgeError {
         this.username = properties.getValue(Properties.USERNAME);
@@ -87,22 +87,22 @@ public class ServiceNowAdapter implements BridgeAdapter {
     public String getName() {
         return NAME;
     }
-    
+
     @Override
     public String getVersion() {
         return VERSION;
     }
-    
+
     @Override
     public void setProperties(Map<String,String> parameters) {
         properties.setValues(parameters);
     }
-    
+
     @Override
     public ConfigurablePropertyMap getProperties() {
         return properties;
     }
-    
+
     /*---------------------------------------------------------------------------------------------
      * IMPLEMENTATION METHODS
      *-------------------------------------------------------------------------------------------*/
@@ -110,18 +110,18 @@ public class ServiceNowAdapter implements BridgeAdapter {
     @Override
     public Count count(BridgeRequest request) throws BridgeError {
         String structure = request.getStructure();
-        
+
         ServiceNowQualificationParser parser = new ServiceNowQualificationParser();
         String query = parser.parse(request.getQuery(),request.getParameters());
         String url = String.format("%s/api/now/stats/%s?sysparm_count=true&sysparm_query=%s", this.instance, structure, URLEncoder.encode(query));
-        
-        HttpClient client = new DefaultHttpClient();
+
+        HttpClient client = HttpClients.createDefault();
         HttpGet get = new HttpGet(url);
         String credentials = String.format("%s:%s", this.username, this.password);
         byte[] basicAuthBytes = Base64.encodeBase64(credentials.getBytes());
         get.setHeader("Authorization", "Basic " + new String(basicAuthBytes));
         get.setHeader("Content-Type", "application/json");
-        
+
         HttpResponse response;
         String output = "";
 
@@ -129,10 +129,10 @@ public class ServiceNowAdapter implements BridgeAdapter {
             response = client.execute(get);
             HttpEntity entity = response.getEntity();
             output = EntityUtils.toString(entity);
-        } 
+        }
         catch (IOException e) {
             throw new BridgeError("Unable to make a connection to properly execute the"
-                    + "query to ServiceNow"); 
+                    + "query to ServiceNow");
         }
 
         Long count;
@@ -168,34 +168,34 @@ public class ServiceNowAdapter implements BridgeAdapter {
         }
 
         String structure = request.getStructure();
-        
+
         StringBuilder queryBuilder = new StringBuilder();
         queryBuilder.append(String.format("%s/api/now/v1/table/%s?sysparm_fields=%s&sysparm_query=%s", this.instance, structure, joinedFields, URLEncoder.encode(query)));
 
-        HttpClient client = new DefaultHttpClient();
+        HttpClient client = HttpClients.createDefault();
         HttpGet get = new HttpGet(queryBuilder.toString());
         String credentials = String.format("%s:%s", this.username, this.password);
         byte[] basicAuthBytes = Base64.encodeBase64(credentials.getBytes());
         get.setHeader("Authorization", "Basic " + new String(basicAuthBytes));
         get.setHeader("Content-Type", "application/json");
-        
+
         HttpResponse response;
         String output = "";
-        
+
         try {
             response = client.execute(get);
             HttpEntity entity = response.getEntity();
             output = EntityUtils.toString(entity);
-        } 
+        }
         catch (IOException e) {
             throw new BridgeError("Unable to make a connection to properly execute the"
-                    + "query to ServiceNow"); 
+                    + "query to ServiceNow");
         }
 
         JSONObject jsonOutput = (JSONObject)JSONValue.parse(output);
         //Map<String,Object> record = new LinkedHashMap<>();
         Record record;
-        
+
         if (jsonOutput.get("error") != null) {
             JSONObject error = (JSONObject) jsonOutput.get("error");
             logger.error("Error: " + error.get("message"));
@@ -204,7 +204,7 @@ public class ServiceNowAdapter implements BridgeAdapter {
         }
         else {
             JSONArray results = (JSONArray)jsonOutput.get("result");
-            
+
             if (results.size() > 1) {
                 throw new BridgeError("Multiple results matched an expected single match query");
             } else if (results.isEmpty()) {
@@ -242,7 +242,7 @@ public class ServiceNowAdapter implements BridgeAdapter {
         }
 
         Map<String,String> metadata = BridgeUtils.normalizePaginationMetadata(request.getMetadata());
-        
+
         // Creating a order by string to add to the jql query.
         List<String> orderList = new ArrayList();
         String order = new String();
@@ -250,7 +250,7 @@ public class ServiceNowAdapter implements BridgeAdapter {
         // Id and Key are considered aliases but have different values, so
         // if one is added the other won't be added so that an error is not thrown.
         Boolean keyAppended = false;
-        
+
         if (request.getMetadata("order") != null) {
             for (Map.Entry<String,String> entry : BridgeUtils.parseOrder(request.getMetadata("order")).entrySet()) {
                 String key = entry.getKey();
@@ -264,39 +264,39 @@ public class ServiceNowAdapter implements BridgeAdapter {
                     else {
                         orderList.add("^ORDERBY" + key);
                     }
-                } 
+                }
             }
             order = StringUtils.join(orderList,",");
         }
-        
+
         queryBuilder.append(String.format("%s/api/now/v1/table/%s?sysparm_fields=%s&sysparm_query=%s%s", this.instance, structure, joinedFields, URLEncoder.encode(query), URLEncoder.encode(order)));
         queryBuilder.append("&sysparm_limit=").append(metadata.get("pageSize"));
         queryBuilder.append("&sysparm_offset=").append(metadata.get("offset"));
-        
-        HttpClient client = new DefaultHttpClient();
+
+        HttpClient client = HttpClients.createDefault();
         HttpGet get = new HttpGet(queryBuilder.toString());
         String credentials = String.format("%s:%s", this.username, this.password);
         byte[] basicAuthBytes = Base64.encodeBase64(credentials.getBytes());
         get.setHeader("Authorization", "Basic " + new String(basicAuthBytes));
         get.setHeader("Content-Type", "application/json");
-        
+
         HttpResponse response;
         String output = "";
-        
+
         try {
             response = client.execute(get);
             HttpEntity entity = response.getEntity();
             output = EntityUtils.toString(entity);
-        } 
+        }
         catch (IOException e) {
             throw new BridgeError("Unable to make a connection to properly execute the"
-                    + "query to ServiceNow"); 
+                    + "query to ServiceNow");
         }
 
         JSONArray jsonArray;
         JSONObject jsonOutput = (JSONObject)JSONValue.parse(output);
         ArrayList<Record> records = new ArrayList<Record>();
-        
+
         if (jsonOutput.get("error") != null) {
             JSONObject error = (JSONObject)jsonOutput.get("error");
             logger.error("Error: " + error.get("message"));
@@ -310,7 +310,7 @@ public class ServiceNowAdapter implements BridgeAdapter {
                 JSONObject recordObject = (JSONObject)jsonArray.get(i);
                 records.add(new Record((Map<String,Object>)recordObject));
             }
-            
+
             // If fields is null, all fields are returned. Get the first element
             // of the returned objects and get its fields.
             if (fields == null ) {
@@ -323,7 +323,7 @@ public class ServiceNowAdapter implements BridgeAdapter {
                 }
             }
         }
-        
+
         metadata.put("count",String.valueOf(records.size()));
         metadata.put("size", String.valueOf(records.size()));
 
@@ -333,13 +333,13 @@ public class ServiceNowAdapter implements BridgeAdapter {
     /*----------------------------------------------------------------------------------------------
      * PRIVATE HELPER METHODS
      *--------------------------------------------------------------------------------------------*/
-    
+
     private void testAuth(String instance) throws BridgeError {
         logger.debug("Testing the authentication credentials");
         HttpGet get = new HttpGet(String.format("%s/api/now/v1/table/sys_user?sysparm_limit=1", instance));
         get = addAuthenticationHeader(get, this.username, this.password);
 
-        DefaultHttpClient client = new DefaultHttpClient();
+        HttpClient client = HttpClients.createDefault();
         HttpResponse response;
         try {
             response = client.execute(get);
@@ -351,7 +351,7 @@ public class ServiceNowAdapter implements BridgeAdapter {
         }
         catch (IOException e) {
             logger.error(e.getMessage());
-            throw new BridgeError("Unable to make a connection to properly to ServiceNow."); 
+            throw new BridgeError("Unable to make a connection to properly to ServiceNow.");
         }
     }
 
